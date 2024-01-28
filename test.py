@@ -55,10 +55,10 @@ def load_images():
         img_path = os.path.join(cutout_img_dir, img_name)
         loaded_img = image.load_img(img_path)
         img_array = image.img_to_array(loaded_img, dtype='int')
-        plt.imshow(img_array)
+        
         plt.axis('off')
         
-    plt.show()
+    
     print()
     # load 10 Random Model Images: Sample out 10 images randomly from the above list
     sample_model_images = sample(model_images,10)
@@ -70,10 +70,10 @@ def load_images():
         img_path = os.path.join(model_img_dir, img_name)
         loaded_img = image.load_img(img_path)
         img_array = image.img_to_array(loaded_img, dtype='int')
-        plt.imshow(img_array)
+        
         plt.axis('off')
         
-    plt.show()
+    
 
 
 # Join the images with path and add in the dataframe
@@ -140,7 +140,73 @@ ax[0].imshow(cutOut_img_arr)
 ax[1].imshow(model_img_arr)
 ax[0].axis('off')
 ax[1].axis('off')
-plt.show()
+
+
+# Creating a class for feature extraction and finding the most similar images
+
+
+
+class FeatureExtractor:
+    
+    # Constructor
+    def __init__(self, arch='ResNet'):
+        
+        self.arch = arch
+        
+             
+        
+        if self.arch == 'ResNet':
+            base_model = ResNet50(weights = 'imagenet')
+            self.model = Model(inputs = base_model.input, outputs = base_model.get_layer('avg_pool').output)
+        
+        
+        elif self.arch == 'Xception':
+            base_model = Xception(weights = 'imagenet')
+            self.model = Model(inputs = base_model.input, outputs = base_model.get_layer('avg_pool').output)
+            
+    
+    # Method to extract image features
+    def extract_features(self, img):
+        
+        
+        if self.arch == 'VGG' or self.arch == 'ResNet':
+            img = img.resize((224, 224))
+        elif self.arch == 'Xception':
+            img = img.resize((299, 299))
+        
+        # Convert the image channels from to RGB
+        img = img.convert('RGB')
+        
+        # Convert into array
+        x = image.img_to_array(img)
+        x = np.expand_dims(x, axis=0)
+        
+        if self.arch == 'VGG':
+            # Proprocess the input as per vgg 16
+            x = vgg_preprocess(x)
+            
+        elif self.arch == 'ResNet':
+            # Proprocess the input as per ResNet 50
+            x = resnet_preprocess(x)
+            
+        elif self.arch == 'Xception':
+            # Proprocess the input as per ResNet 50
+            x = xception_preprocess(x)
+        
+                
+        # Extract the features
+        features = self.model.predict(x) 
+        
+        # Scale the features
+        features = features / np.linalg.norm(features)
+        
+        return features      
+
+
+
+
+# Extract Features from queryImage
+
 
 
 def testModel(input_file):
@@ -158,11 +224,11 @@ def testModel(input_file):
     for idx, feat in image_features_resnet.items():
 
         # Compute the similarity using Euclidean Distance
-        similarity_images_resnet[idx] = np.sum((queryFeatures_Resnet - feat)**2) ** 0.5
+        similarity_images_resnet[idx] = np.sum((testing_features - feat)**2) ** 0.5
 
     # Extracting the top 10 similar images
     similarity_resnet_sorted = sorted(similarity_images_resnet.items(), key = lambda x : x[1], reverse=False)
-    top_10_indexes_resnet = [idx for idx, _ in similarity_resnet_sorted][ : 8]
+    top_10_indexes_resnet = [idx for idx, _ in similarity_resnet_sorted][ : 10]
     
     # Plotting the images
     top_10_similar_imgs_Resnet = listing_data.iloc[top_10_indexes_resnet]['modelImages_path']
@@ -173,37 +239,41 @@ def testModel(input_file):
     print("===================== QUERY IMAGE ==========================")
     plt.figure(figsize=(4,4))
     testing_img_arr = image.img_to_array(testing_img, dtype='int')
-    plt.imshow(testing_img_arr)
-    plt.show()
+    
+    
     
 
     fig = plt.figure(figsize=(10,5))
     print("===================== SIMILAR IMAGES ==========================")
     for i, (img_path, brand) in enumerate(zip(top_10_similar_imgs_Resnet,desc_Resnet)):
-        plt.subplot(2, 4, i+1)
+        plt.subplot(2, 5, i+1)
         img = image.load_img(img_path)
         img_arr = image.img_to_array(img, dtype='int')
         plt.imshow(img_arr)
         plt.xlabel(price)
         plt.title(brand)
         plt.axis('off')
-    plt.show()
+    
 
 testModel.pickle = "testModel.pkl"
+
+
+
 
 st.title("Image Similarity For E-Commerce")
 st.subheader("Image Search")
 st.markdown("---")
 input_file = st.file_uploader("Input File")
 camera_input = st.camera_input("Camera Input")
+st.image(input_file,print("Brand: {}".format(brand))) 
 
-st.image()
 
 
-with open(testModel.pickle, 'rb') as file:  
-    testModel.pickle = pickle.load(file)
+with open("resnet_model.pkl", 'rb') as file:  
+    image_features_resnet=pickle.load(file)
 
-st.write(testModel)
-st.image()
+
+ 
+
 
 st.success("Done")
